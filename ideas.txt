@@ -1,0 +1,5 @@
+#A# Setup script ideas
+# A series of if statements evaluating whether key files are in place before executing the setup, executing each step as 
+necessary.
+# Consider embedding this into the overall script once the if statements are in place as a kind of 'sanity check'
+# Consider making some kind of initscript template function, once you figure out initscripts.
