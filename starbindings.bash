@@ -1,9 +1,10 @@
 #!/bin/bash
-#V0.3
-##Variables for menucreator
+#V0.4
+##Variables for menucreator and in all menus
 declare -i MCOUNTER
 declare -a MARRAY
 declare MNAME
+declare CURRMEN
 ##Variables for steamlogin
 declare LOGINPW
 declare LOGINNOPW
@@ -11,7 +12,8 @@ declare VLOGINPW
 declare VLOGINNOPW
 declare STEAMUSER
 declare STEAMPW
-##Variables for config editor
+##Variables for server config/log menus
+declare SVLOGDIR="/home/steam/Steam/SteamApps/common/Starbound/starbound_server.log"
 declare REPV
 declare REPVARRAY
 declare CFGKEY
@@ -27,6 +29,12 @@ fail(){
 echo -e "\n$1\n"; exit 1
 }
 inputreturn(){
+echo -e "\n"
+read -p "Press Enter to return to menu."
+echo -e "\n"
+$CURRMEN
+}
+inputproceed(){
 echo -e "\n"
 read -p "Press Enter to proceed."
 echo -e "\n"
@@ -47,7 +55,7 @@ elif [[ $LOGINPW -eq 0 && $LOGINNOPW -eq 0 && $VLOGIN -eq 0 && $VLOGINNOPW -eq 1
 sudo su - steam -c "read -p 'Enter your Steam username: ' STEAMUSER
 /opt/steam/steamcmd.sh +login \$STEAMUSER +app_update 211820 validate +exit"
 else
-echo "steamlogin function failed"; exit 1
+fail "Steamlogin function failed"
 fi
 read -p "Press ENTER to return to main menu."
 mmenu
@@ -99,9 +107,9 @@ case $VARCONFIRM in
 	*)varconfirm;;
 esac
 if [[ $VARCHANGE = "multivarchange" ]]; then
-inputreturn; morevars
+inputproceed; morevars
 else
-inputreturn; svcfvarmenu
+inputreturn
 fi
 }
 morevars(){
@@ -127,7 +135,7 @@ tput clear
 echo -e "\nYou entered: ${REPVARRAY[@]}\n"
 read -p "Is this correct? Y/N: " VARRAYCONFIRM
 case $VARRAYCONFIRM in 
-	y|Y)$VARCHANGE; echo -e "\nChanges written to file.\n"; inputreturn; svcfvarmenu;;
+	y|Y)$VARCHANGE; echo -e "\nChanges written to file.\n"; inputreturn;;
 	n|N)varrayinput;;
 	*)varrayconfirm;;
 esac
@@ -142,7 +150,7 @@ fi
 }
 
 multivarchange(){
-if [[ $REPV =~ .*[[:alpha:]]+.* || $REPV =~ .*[[:punct:]]+.* ]]; then
+if [[ $CFGKEY = "serverPasswords" || $REPV =~ .*[[:alpha:]]+.* || $REPV =~ .*[[:punct:]]+.* ]]; then
 sudo sed -i "/$CFGKEY*/c\  \"$CFGKEY\" : \[ \"$REPV\"\ ]," $CFGDIR
 for i in "${REPVARRAY[@]}"; do
 sudo sed -i "s|  \"$CFGKEY\" : \[ \"$REPV\"|&, \"$i\"|"  $CFGDIR
@@ -158,6 +166,7 @@ unset REPVARRAY
 
 #Menu functions
 mmenu(){
+CURRMEN="mmenu"
 MNAME="Main Menu"
 MARRAY=("Steam management" "Server management" "Exit script")
 menuprinter
@@ -171,6 +180,7 @@ esac
 } 
 #Steam
 smenu(){
+CURRMEN="smenu"
 read -p "Are you logged into steam elsewhere? Y\\N: " SMENU
 case $SMENU in
 y|Y) ssmenu1;;
@@ -179,6 +189,7 @@ n|N) ssmenu2;;
 esac
 }
 ssmenu1(){
+CURRMEN="ssmenu1"
 MNAME="Steam Management"
 MARRAY=("Update Starbound" "Verify Starbound" "Back to Main Menu" "Exit")
 menuprinter
@@ -194,6 +205,7 @@ steamlogin;;
 esac
 }
 ssmenu2(){
+CURRMEN="ssmenu2"
 MNAME="Steam Management"
 MARRAY=("Update Starbound" "Verify Starbound" "Back to Main Menu" "Exit")
 menuprinter
@@ -210,6 +222,7 @@ esac
 }
 #Server
 svmenu(){
+CURRMEN="svmenu"
 MNAME="Server Management"
 MARRAY=("Server Daemon Management" "Server Log Options" "Server Configuration" "Back to Main Menu" "Exit")
 menuprinter
@@ -224,32 +237,40 @@ case $SVMENU in
 esac
 }
 svprmenu(){
+CURRMEN="svprmenu"
 MNAME="Server Daemon Management"
 MARRAY=("Start Server Daemon" "Stop Server Daemon" "Restart Server Daemon" "Server Daemon Status" "Back to Server Management" "Exit")
 menuprinter
 read -p "Make your selection: " SVPRMENU
 case $SVPRMENU in
-1) service starbound start;inputreturn;svprmenu;;
-2) service starbound stop;inputreturn;svprmenu;;
-3) service starbound restart;inputreturn;svprmenu;;
-4) service starbound status;inputreturn;svprmenu;;
+1) service starbound start;inputreturn;;
+2) service starbound stop;inputreturn;;
+3) service starbound restart;inputreturn;;
+4) service starbound status;inputreturn;;
 5) svmenu;;
 6) exit 0;;
 *) svprmenu;;
 esac
 }
 svlgmenu(){
+CURRMEN="svlgmenu"
 MNAME="Server Log Options"
 MARRAY=("Open Log" "Review Recent Events" "Review Errors" "Monitor Live Changes" "Wipe Server Logs" "Back to Server Management" "Exit")
 menuprinter
 read -p "Make your selection: " SVLGMENU
 case $SVLGMENU in
-7) svmenu;;
-8) exit 0;;
+1) less $SVLOGDIR; svlgmenu;;
+2) tail -15 $SVLOGDIR; inputreturn;;
+3) grep -iE -A 5 "Error" $SVLOGDIR || echo "No errors found."; inputreturn;;
+4) echo "Press Ctrl+C to stop monitoring the log"; inputproceed; tail -f $SVLOGDIR; svlgmenu;;
+5) cat /dev/null | sudo tee $SVLOGDIR; echo "Server log wiped"; inputreturn;;
+6) svmenu;;
+7) exit 0;;
 *) svlgmenu;;
 esac
 }
 svcfmenu(){
+CURRMEN="svcfmenu"
 MNAME="Server Configuration"
 MARRAY=("Variable/Password Management" "Universe Management" "User Management" "Back to Server Management" "Exit" )
 menuprinter
@@ -262,6 +283,7 @@ case $SVCFMENU in
 esac
 }
 svcfvarmenu(){
+CURRMEN="svcfvarmenu"
 MNAME="Variable/Password Management"
 MARRAY=("Display Server Config File" "Server Password" "Server Name" "Server Port" "Max Players" "Edit Server Config File Directly" "Back to Server Management" "Exit")
 menuprinter
@@ -321,7 +343,7 @@ fi
 servertest(){
 echo "Checking for Starbound Server"
 if [ -s $SERVERFILEDIR ]; then
-echo "Starbound server exists. Your files appear to be in order.";inputreturn; else
+echo "Starbound server exists. Your files appear to be in order.";inputproceed; else
 echo "Starbound server does not exist. Launching steamcmd and downloading..."; steamsetup
 fi
 }
@@ -335,6 +357,7 @@ case $SETUPSMENU in
         *) steamsetup;;
 esac
 }
+trap "echo -e '\nCannot exit script with Ctrl+C'" SIGINT
 sudo -vS
 tput clear
 usertest
