@@ -6,14 +6,14 @@ declare -a MARRAY
 declare MNAME
 declare CURRMEN
 ##Variables for steamlogin
-declare STEAMUSER
-declare STEAMPW
+declare STEAMUSER=""
+declare STEAMPW=""
 ##Variables for server variable/log menus
 declare SVLOGDIR="/home/steam/Steam/SteamApps/common/Starbound/starbound_server.log"
 declare REPV
 declare REPVARRAY
 declare CFGKEY
-declare CFGDIR="/home/steam/Steam/SteamApps/common/Starbound/starbound.config" 
+declare CFGDIR="/home/steam/Steam/SteamApps/common/Starbound/starbound.config"
 declare VARCHANGE
 ##Variables for setup portion
 declare SOURCEDIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )"
@@ -32,7 +32,7 @@ inputreturn(){
   echo -e "\n"
   read -p "Press Enter to return to menu."
   echo -e "\n"
-$CURRMEN
+  $CURRMEN
 }
 inputproceed(){
   echo -e "\n"
@@ -40,23 +40,13 @@ inputproceed(){
   echo -e "\n"
 }
 steamlogin(){
-  if [[ $1 = loginpw ]]; then 
-    sudo su - steam -c "read -p 'Enter your Steam username: ' STEAMUSER
-    read -p 'Enter your Steam password: ' STEAMPW
-    /opt/steam/steamcmd.sh +login \$STEAMUSER \$STEAMPW +app_update 211820 +exit"
-  elif [[ $1 = loginpwless ]]; then 
-    sudo su - steam -c "read -p 'Enter your Steam username: ' STEAMUSER
-    /opt/steam/steamcmd.sh +login \$STEAMUSER +app_update 211820 +exit"
-  elif [[ $1 = vloginpw ]]; then 
-    sudo su - steam -c "read -p 'Enter your Steam username: ' STEAMUSER
-    read -p 'Enter your Steam password: ' STEAMPW
-    /opt/steam/steamcmd.sh +login \$STEAMUSER \$STEAMPW +app_update 211820 validate +exit"
-  elif [[ $1 = vloginpwless ]]; then 
-    sudo su - steam -c "read -p 'Enter your Steam username: ' STEAMUSER
-    /opt/steam/steamcmd.sh +login \$STEAMUSER +app_update 211820 validate +exit"
-  else
-    fail "Steamlogin function failed"
-  fi
+  read -p 'Enter your Steam username: ' STEAMUSER
+  [[ $1 = 'loginpw' || $1 = 'vloginpw' ]] && read -p 'Enter your Steam password: ' STEAMPW
+
+  command="/opt/steam/steamcmd.sh +login $STEAMUSER $STEAMPW +app_update 211820"
+  [[ $1 = 'vlogin' || $1 = 'vloginpwless' ]] && command="$command validate"
+
+  sudo su - steam -c "$command +exit"
   read -p "Press ENTER to return to main menu."
   mmenu
 }
@@ -100,8 +90,8 @@ varconfirm
 varconfirm(){
   tput clear
   echo -e "\nYou entered: $REPV\n"
-  read -p "Is this correct? Y/N: " VARCONFIRM 
-  case $VARCONFIRM in 
+  read -p "Is this correct? Y/N: " VARCONFIRM
+  case $VARCONFIRM in
   	y|Y)$VARCHANGE;echo -e "\nChanges written to file\n";;
   	n|N)varinput;;
   	*)varconfirm;;
@@ -134,7 +124,7 @@ varrayconfirm(){
   tput clear
   echo -e "\nYou entered: ${REPVARRAY[@]}\n"
   read -p "Is this correct? Y/N: " VARRAYCONFIRM
-  case $VARRAYCONFIRM in 
+  case $VARRAYCONFIRM in
   	y|Y)$VARCHANGE; echo -e "\nChanges written to file.\n"; inputreturn;;
   	n|N)varrayinput;;
   	*)varrayconfirm;;
@@ -144,8 +134,8 @@ varrayconfirm(){
 singlevarchange(){
   if [[ *$REPV =~ .*[[:alpha:]]+.* && $REPV != "true" && $REPV != "false" || $REPV =~ .*[[:punct:]]+.* ]]; then
     sudo sed -i "/$CFGKEY*/c\  \"$CFGKEY\" : \"$REPV\"," $CFGDIR
-  else 
-    sudo sed -i "/  \"$CFGKEY\" :*/c\  \"$CFGKEY\" : $REPV," $CFGDIR 
+  else
+    sudo sed -i "/  \"$CFGKEY\" :*/c\  \"$CFGKEY\" : $REPV," $CFGDIR
   fi
 }
 
@@ -155,7 +145,7 @@ multivarchange(){
     for i in "${REPVARRAY[@]}"; do
       sudo sed -i "s|  \"$CFGKEY\" : \[ \"$REPV\"|&, \"$i\"|"  $CFGDIR
       done
-  else 
+  else
     sudo sed -i "/$CFGKEY*/c\  \"$CFGKEY\" : \[ $REPV \]," $CFGDIR
     for i in "${REPVARRAY[@]}"; do
       sudo sed -i "s|  \"$CFGKEY\" : \[ $REPV|&, $i|"  $CFGDIR
@@ -177,7 +167,7 @@ mmenu(){
     3) exitscript;;
     *) mmenu
   esac
-} 
+}
 #Steam
 smenu(){
   CURRMEN="smenu"
@@ -272,9 +262,9 @@ svcfmenu(){
   menuprinter
   read -p "Make your selection: " SVCFMENU
   case $SVCFMENU in
-    1)svcfvarmenu;; 
+    1)svcfvarmenu;;
     2)svcfunimenu;;
-    4)svmenu;;	
+    4)svmenu;;
     5)exitscript;;
     *)svcfmenu;;
   esac
@@ -308,13 +298,13 @@ svcfunimenu(){
       sudo -u steam xargs mv {} -v -t /home/steam/Steam/SteamApps/common/Starbound/universebackup/
        ;;
     2)find /home/steam/Steam/SteamApps/common/Starbound/universe/ -regex ".*\.world"|\
-      sudo xargs rm {} 
+      sudo xargs rm {}
       ;;
     3)find /home/steam/Steam/SteamApps/common/Starbound/universebackup/ -regex ".*\.world"|\
       sudo -u steam xargs mv {} -v -t /home/steam/Steam/SteamApps/common/Starbound/universe/
       ;;
     4)find /home/steam/Steam/SteamApps/common/Starbound/universebackup/ -regex ".*\.world"|\
-      sudo xargs rm {} 
+      sudo xargs rm {}
       ;;
     *)svcfunimenu;;
   esac
@@ -383,4 +373,5 @@ steamtest
 inittest
 servertest
 mmenu
+
 
