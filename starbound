@@ -1,6 +1,7 @@
 ### INIT INFO
 # Provides:        starbound
 # Required-Start:    networking
+# Required-Stop:    networking
 # Default-Start:    2 3 4 5
 # Default-Stop:        S 0 1 6
 # Short-Description:    Starbound Server Daemon
@@ -23,9 +24,6 @@ DAEMON_ARGS=""
 
 . /lib/init/vars.sh
 . /lib/lsb/init-functions
-# Here there be password kludges
-sh /home/steam/pwupdate.sh
-# End password update script execution
 do_start() {
     if [ -e $PIDFILE ]; then
         PID=`cat $PIDFILE`

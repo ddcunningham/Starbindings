@@ -1,0 +1,335 @@
+#!/bin/bash
+##starbound server script V0.7
+#variables
+declare marray
+declare mntitle
+declare -rx script=${0##*/}
+##Variables for server variable/log menus
+declare -rx svlogdir="/home/steam/Steam/SteamApps/common/Starbound/starbound_server.log"
+declare -rx cfgdir="/home/steam/Steam/SteamApps/common/Starbound/starbound.config"
+##Variables for setup portion
+declare -rx scriptdir="$( cd "$( dirname "$(readlink "${BASH_SOURCE[0]}")")" && pwd )"
+declare -rx steamcmddir="/opt/steam/steamcmd.sh"
+declare -rx initfiledir="/etc/init.d/starbound"
+declare -rx serverfiledir="/home/steam/Steam/SteamApps/common/Starbound/linux64/starbound_server"
+declare -rx unidir="/home/steam/Steam/SteamApps/common/Starbound/universe/"
+declare -rx unibackup="/home/steam/Steam/SteamApps/common/Starbound/universebackup/"
+#interrupt/kill signal trap that invalidates sudo credentials
+
+
+inttrap(){
+trap "{ sudo -k; echo -e '\nScript killed or interrupted.'; exit 0; }" sigint sigkill
+}
+#exit function: the preferred method of exit.
+exitscript(){
+  sudo -k
+  exit 0
+}
+##fail function: exits code 1 with a printed message upon failure of something
+fail(){
+  tput clear
+  echo -e "\nError: $1 failed on line $LINENO.  Terminating $script.\n"
+  sudo -k
+  exit 1
+} 
+##insane function: exits when a necessary file, command or builtin is not present.
+insane(){
+  tput clear
+  echo -e "\nError: $1 not detected by script. $2 Terminating $script.\n"
+  sudo -k
+  exit 1
+}
+#input prompt: asks for input before clearing screen and returning to menu
+waitinput(){
+  if [ -z "$1" ]
+  then echo ""
+    read -p "Press enter to continue..."
+  else echo ""
+    read -p "$1"
+  fi
+}
+#Menu construct: imitates select without imitating its problems. 
+#It's a doozy
+#Case statement formatted according to 'menu tree hierarchy layers' 
+#Consider using positional params over global array/variable for menu values.
+menuframe(){
+  while :; do
+    tput clear
+    echo -e "\n$mntitle\n"
+    for index in ${!marray[@]}; do
+      echo -e "$((index + 1)) ${marray[$index]}\n"
+    done
+    read -p "Make your selection: " input
+
+    i=$((input - 1))
+    if [[ $i -ge 0 ]]; then
+      input=${marray[$i]}
+    fi
+  
+      case $input in
+        #1#begin universal menu entries
+        Exit\ Script*)exitscript;;
+        #1#begin main menu
+        Update/Validate*)metasteammn;;
+        Server\ Management*)servermn;;
+          #2#begin common menu entries for main sublayer
+          Return\ To\ Main*)mainmn;;
+          #2#begin steam premenu 
+          Yes,\ I\ am\ logged*)steamlogin pw;;
+          No,\ I\ am\ not\ logged*)steamlogin nopw;;
+          #2#begin server main menu
+          Server\ Process*)serverprmn;;
+          Server\ Log*)serverlogmn;;
+          Server\ Config*)servercfgmn;;
+            #3#begin common menu entries for server sublayer
+            Return\ To\ Server*)servermn;;
+            #3#begin server process menu
+            Start\ Server*)sudo service starbound start;waitinput;;
+            Stop\ Server*)sudo service starbound stop;waitinput;;
+            Restart\ Server*)sudo service starbound restart;waitinput;;
+            Server\ Daemon*)sudo service starbound status;waitinput;;
+            #3#begin server log menu
+            Open\ Log*) less $svlogdir;;
+            Review\ Recent*) tail -15 $svlogdir; waitinput;;
+            Review\ Errors*) { grep -i -A 5 "error" $svlogdir && waitinput; } || waitinput "No errors found.";;
+            Monitor\ Live*) echo "Press Ctrl+C to stop monitoring the log"; waitinput
+              trap : sigint; tail -f $svlogdir; inttrap;;
+            Wipe\ Server\ Logs*) cat /dev/null | sudo tee $svlogdir; waitinput "Server log wiped.";;
+            #3#begin server config menu
+            Variable/Password*) servervarmn;;
+            Universe/World*) serverunimn;;
+            Access\ Control*) serveraccmn;;
+              #4#begin server variable menu
+              Server\ Pass*)cfgkey="serverPasswords"; svquant="multi"; varprint ;; 
+              Server\ Name*)cfgkey="serverName"; svquant="single"; varprint;;
+              Server\ Port*)cfgkey="gamePort"; svquant="single"; varprint;;
+              Max\ Players*)cfgkey="maxPlayers"; svquant="single"; varprint;;
+              Edit\ Server\ Variable*)sudo vim $cfgdir;svcfmenu;;
+              Display\ Server\ Variable*)less $cfgdir;svcfvarmenu;;
+              #4#begin server universe menu
+              #remember to add full universe deletion/backups
+              Back\ Up\ World*)find $unidir -regex ".*\.world"|\
+                sudo -u steam xargs mv -v -t $unibackup
+                waitinput "Copied current state of worlds to backup directory. Press enter to continue."
+                ;;
+              Delete\ World*)find $unidir -regex ".*\.world"|\
+                sudo xargs rm 
+                waitinput "Deleted current state of all worlds. World states are 'reset'. Press enter to continue."
+                ;;
+              Restore\ World*)find $unibackup -regex ".*\.world"|\
+                sudo -u steam xargs mv -v -t $unidir
+                waitinput "Imported world states from backup directory.  Press Enter to continue."
+                ;;
+              Back\ Up\ Universe*)sudo cp -v $unidir* $unibackup 
+                waitinput "Copied current state of universe to backup directory. Press enter to continue.";;
+              Delete\ Universe*)sudo rm -rf $unidir* 
+                waitinput "Deleted current state of universe. New worlds will be generated. Press enter to continue.";;
+              Restore\ Universe*)sudo mv -v $unibackup* $unidir
+                waitinput "Imported stored state of universe from backup directory. Press enter to continue.";;
+              Purge\ Backups*)sudo rm -rf $unibackup*
+                waitinput "Purged backup directory. Press Enter to continue.";;
+      esac
+    menuframe
+    done
+}
+##Menu titles and entries 
+mainmn(){
+  mntitle="Main Menu"
+  marray=('Update/Validate Starbound via Steam' 'Server Management' 'Exit Script')
+}
+metasteammn(){
+  mntitle="Are you currently logged into your steam account elsewhere?"
+  marray=('Yes, I am logged into steam.' 'No, I am not logged into steam.' 'Return To Main Menu' 'Exit Script')
+}
+servermn(){
+  mntitle="Server Management"
+  marray=('Server Process Management' 'Server Log Management' 'Server Configuration' 'Return To Main Menu' 'Exit Script')
+}
+serverprmn(){
+  mntitle="Server Process Management"
+  marray=('Start Server' 'Stop Server' 'Restart Server' 'Server Daemon Status' 'Return To Server Management' 'Exit Script')
+}
+serverlogmn(){
+  mntitle="Server Log Management"
+  marray=('Open Log' 'Review Recent Events' 'Review Errors' 'Monitor Live Changes' 'Wipe Server Logs' 'Return To Server Management' 'Exit Script')
+}
+servercfgmn(){
+  mntitle="Server Configuration"
+  marray=('Variable/Password Management' 'Universe/World Management' 'Return To Server Management' 'Exit Script')
+}
+servervarmn(){
+  mntitle="Variable/Password Management"
+  marray=('Server Password' 'Server Name' 'Server Port' 'Max Players' 'Edit Server Variable File' 'Display Server Variable File' 'Return To Server Management' 'Exit Script') 
+}
+serverunimn(){
+  mntitle="Universe/World Management"
+  marray=('Back Up World States' 'Delete World States' 'Restore World State' 'Back Up Universe' 'Delete Universe' 'Restore Universe' 'Purge Backups' 'Return To Server Management' 'Exit Script') 
+}
+
+steamlogin(){
+  read -p 'Enter your Steam username: ' steamuser
+  [ $1 = pw ] && read -p 'Enter your Steam password: ' steampw
+  sudo su - steam -c "/opt/steam/steamcmd.sh +login $steamuser $steampw +app_update 211820 validate +quit" 
+  waitinput
+}
+## Server variable printing/changing snippet
+
+varprint (){
+  echo -e "\nThe value(s) for this variable:\n"
+  awk -F ",$" -v k="$cfgkey" '{
+    for(jit=1;jit<=NF;jit++){
+    if( $jit ~ k ){
+    gsub(/\\s|\"/, "")
+    sub(/[^:]+:/, "")
+    print $jit
+    }
+    }
+    }' $cfgdir
+  echo -e "\n"
+  varmodify 
+}
+varmodify(){
+  read -p "Do you want to modify this? Y/N: " vmodch
+  case $vmodch in
+    y|Y)varinput ;;
+    n|N)menuframe;;
+    *)varmodify ;;
+  esac
+}
+varinput(){
+read -p "Enter a replacement variable:" repv
+varconfirm 
+}
+varconfirm(){
+  tput clear
+  echo -e "\nYou entered: $repv\n"
+  read -p "Is this correct? Y/N: " varconfirmch
+    case $varconfirmch in
+      y|Y)varchange;echo -e "\nChanges written to file\n";;
+      n|N)varinput;;
+      *)varconfirm;;
+    esac
+  if [ $svquant = "multi" ]; then waitinput; morevars
+
+    else waitinput; menuframe
+  fi
+}
+morevars(){
+  read -p "Do you have any other variables you'd like to enter? Y/N: " morevarsch
+  case $morevarsch in
+    y|Y)varrayinput;;
+    n|N)menuframe;;
+    *)morevars;;
+  esac
+}
+varrayinput(){
+  tput clear
+  echo -e "\nInput your variable entries.  ENTER submits an entry, CTRL+D ceases prompt.\n"
+  while read -p "> " repvline
+    do
+      repvarray=(${repvarray[@]} "$repvline")
+    done
+  varrayconfirm
+}
+varrayconfirm(){
+  tput clear
+  echo -e "\nYou entered: ${repvarray[@]}\n"
+  read -p "Is this correct? Y/N: " varraych
+  case $varraych in
+        y|Y)varchange ; echo -e "\nChanges written to file.\n"; waitinput;menuframe;;
+        n|N)varrayinput ;;
+        *)varrayconfirm ;;
+  esac
+}
+
+varchange(){
+  case $svquant in
+    single)if [[ *$repv =~ .*[[:alpha:]]+.* && $repv != "true" && $repv != "false" || $repv =~ .*[[:punct:]]+.* ]]; then
+        sudo sed -i "/$cfgkey*/c\  \"$cfgkey\" : \"$repv\"," $cfgdir
+      else
+        sudo sed -i "/  \"$cfgkey\" :*/c\  \"$cfgkey\" : $repv," $cfgdir
+      fi;;
+    multi)if [[ $cfgkey = "serverPasswords" || $repv =~ .*[[:alpha:]]+.* || $repv =~ .*[[:punct:]]+.* ]]; then
+        sudo sed -i "/$cfgkey*/c\  \"$cfgkey\" : \[ \"$repv\"\ ]," $cfgdir
+      for i in "${repvarray[@]}"; do
+        sudo sed -i "s|  \"$cfgkey\" : \[ \"$repv\"|&, \"$i\"|"  $cfgdir
+        done
+      else
+      sudo sed -i "/$cfgkey*/c\  \"$cfgkey\" : \[ $repv \]," $cfgdir
+      for i in "${repvarray[@]}"; do
+      sudo sed -i "s|  \"$cfgkey\" : \[ $repv|&, $i|"  $cfgdir
+      done
+      fi
+      unset repvarray;;
+    *)fail "varchange";;
+esac
+}
+
+#THE FRAYED ENDS OF SANITY CHECKING
+#THE SETUP SECTION
+linktest(){
+  if find /usr/ -regex ".*$script" | xargs ls -l | grep $scriptdir/$script; then
+    usertest; else
+    echo "Checking for symlink in search path"
+    waitinput "Script is not linked into search path.  Press Enter to link and continue."
+    find /usr/ -regex ".*$script" | sudo xargs rm
+    sudo ln -s $scriptdir/$script /usr/bin/$script
+    waitinput "You may now use this script by simply entering its name from any directory.  Press enter to continue."
+    usertest
+  fi
+}
+usertest(){
+  if getent passwd steam > /dev/null; then
+    steamtest; else
+    echo "Checking for user 'steam'"
+    waitinput "User 'steam' does not exist.  Press enter to create and continue." 
+    sudo adduser --disabled-login steam
+    steamtest
+  fi
+}
+steamtest(){
+  if [ -s $steamcmddir ]; then
+    inittest; else
+    echo "Checking for steamcmd directory."
+    waitinput "Steamcmd directory does not exist. Press enter to create and continue." 
+    cd /opt/steam || sudo mkdir /opt/steam; cd /opt/steam
+    sudo curl http://media.steampowered.com/client/steamcmd_linux.tar.gz|sudo tar xz
+    sudo chown -R steam:steam /opt/steam
+    waitinput "Updating steamcmd.  Press enter to proceed."
+    sudo su - steam -c "/opt/steam/steamcmd.sh +exit"
+    inittest
+  fi
+}
+inittest(){
+  if [ -s $initfiledir ]; then
+    servertest; else
+    echo "Checking for Starbound daemon file."
+    waitinput "Starbound daemon file is not in init.d.  Press enter to copy."
+    sudo chown steam:steam $sourcedir/starbound || insane "Starbound daemon file" "Should be in script's directory."
+    sudo cp -vp $sourcedir/starbound $initfiledir
+    sudo update-rc.d -v starbound defaults
+    servertest
+  fi
+}
+servertest(){
+  if [ -s $serverfiledir ]; then
+  return
+  else
+  echo "Checking for Starbound server directory."
+  waitinput "Starbound server directory not detected.  Press enter to continue and download from Steam."; steamsetup
+  fi
+}
+steamsetup(){
+  read -p "Are you logged into steam elsewhere? Y\\N: " setupsteammn
+  case $setupsteammn in
+    y|Y)steamlogin pw;;
+    n|N)steamlogin nopw;;
+    *) steamsetup;;
+  esac
+  [ -n $unibackup ] || sudo -u steam mkdir $unibackup
+}
+sudo -vS || fail sudo
+inttrap  
+linktest
+mainmn
+menuframe
