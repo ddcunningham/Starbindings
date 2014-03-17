@@ -50,7 +50,7 @@ waitinput(){
 }
 #Menu construct: imitates select without imitating its problems. 
 #It's a doozy
-#Case statement formatted according to 'menu tree hierarchy layers' 
+#Case statement formatted according to 'menu hierarchy tree' 
 #Consider using positional params over global array/variable for menu values.
 menuframe(){
   while :; do
@@ -107,7 +107,6 @@ menuframe(){
               Edit\ Server\ Variable*)sudo vim $cfgdir;svcfmenu;;
               Display\ Server\ Variable*)less $cfgdir;svcfvarmenu;;
               #4#begin server universe menu
-              #remember to add full universe deletion/backups
               Back\ Up\ World*)find $unidir -regex ".*\.world"|\
                 sudo -u steam xargs mv -v -t $unibackup
                 waitinput "Copied current state of worlds to backup directory. Press enter to continue."
